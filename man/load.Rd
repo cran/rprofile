@@ -12,19 +12,22 @@
   \item{isolate}{[\code{logical(1)}] whether to isolate the project from the global configuration (default: \code{FALSE})}
   \item{renv}{[\code{logical(1)}] whether to activate an \pkg{renv}, if present (default: \code{TRUE})}
   \item{dotenv}{[\code{logical(1)}] whether to load environment variables defined in a local \file{.env} file (default: \code{TRUE})}
-  \item{dev}{[\code{logical(1)}] whether to run \code{devtools::load_all()} if the current project is a development package}
+  \item{dev}{[\code{logical(1)|call}] whether to run \code{pkgload::load_all()} if the current project is a development package (default: \code{TRUE}; see \strong{Details})}
 }
 \value{
   \code{rprofile::load()} will invisibly return whether loading the user R profile file succeeded: in case of an error, it returns \code{FALSE} and converts the error into a warning.
 }
 \details{
-  This function should be the first thing that gets executed inside a project \file{.Rprofile} file, and it should usually be written exactly as follows: \code{requireNamespace("rprofile", quietly = TRUE) && rprofile::load()}.
+  This function should be the first thing that gets executed inside a project \file{.Rprofile} file, and it should usually be written exactly as follows: \code{if (requireNamespace("rprofile", quietly = TRUE)) rprofile::load()} (the \code{if} being present to ensure that \verb{R CMD} can still run in the current directory when  \pkg{rprofile} is not installed).
 
   Unless \code{isolate = TRUE} is set, the user R profile configuration is preferentially looked up in the \env{R_PROFILE_USER} environment variable. If that is unset, it is instead loaded from \file{~/.Rprofile}. It is loaded (mostly) \emph{as-if} its code was directly copied into the project \file{.Rprofile} file. By contrast, if \code{isolate = TRUE} is set, no attempt to load any further \file{.Rprofile} files is made.
 
-  \code{rprofile::load()} will by default also activate the \pkg{renv} associated with the current project, if any, and will also load environment variables defined in a local \file{.env} file. These two actions will happen \emph{before} the user profile is loaded.
+  \code{rprofile::load()} will by default also activate the \pkg{renv} associated with the current project, if any, and will also load environment variables defined in a local \file{.env} file. These two actions will happen \emph{before} the user profile is loaded. See the \strong{Note} below.
 
-  Lastly, \code{rprofile::load()} will check if the code is being run from an interactive session. If so, and if the project contains a \file{DESCRIPTION} file, \pkg{rprofile} will attempt to load \pkg{devtools} and then execute \code{devtools::load_all(export_all = FALSE)}. This will happen inside the session’s \code{\link[base:Startup]{.First}} hook function, to ensure that the package load order is not disrupted by prematurely loading \pkg{devtools} or any of the package dependencies. If a \code{.First} hook function already exists (i.e. because it was defined in the system or user profile), that existing definition will be executed \emph{first}.
+  Lastly, \code{rprofile::load()} will check if the code is being run from an interactive session. If so, and if the project contains a \file{DESCRIPTION} file, \pkg{rprofile} will attempt to load \pkg{pkgload} and then execute \code{pkgload::load_all(export_all = FALSE)}. To avoid disrupting the regular package load order, this action will be deferred until after all default packages (given by \code{getOption('defaultPackages')}) have been loaded and attached. Users can customize which code should be run by passing an unevaluated expression (instead of \code{TRUE}) in the \code{dev} argument. Since this code will be evaluated \emph{after} the remaining \file{.Rprofile} code has been run, the argument may refer to functions defined afterwards (see \strong{Examples}).
+}
+\note{
+  You need to ensure that \pkg{renv} is not loaded redundantly in your \file{.Rprofile} file. In other words, please make sure that the line \code{source("renv/activate.R")}, which \pkg{renv} adds automatically, is \emph{not} present in the file. \code{rprofile::load()} prevents \pkg{renv} from subsequently adding this line to the project \file{.Rprofile} file.
 }
 \examples{
 # Each option is configurable; in the extreme case, the function does nothing:
@@ -34,6 +37,16 @@ rprofile::load(isolate = TRUE, renv = FALSE, dotenv = FALSE, dev = FALSE)
 # In general, the following code should be the first line of a project
 # `.Rprofile` file, which first tests whether the package is installed, and then
 # loads it and runs the chosen initializations:
-requireNamespace("rprofile", quietly = TRUE) && rprofile::load()
+if (requireNamespace("rprofile", quietly = TRUE)) rprofile::load()
+}
+
+\dontrun{
+# We can customize how to load development packages:
+if (requireNamespace("rprofile", quietly = TRUE)) rprofile::load(dev = quote(reload()))
+
+reload = function () {
+  devtools::document()
+  devtools::load_all(quiet = TRUE)
+}
 }
 }
